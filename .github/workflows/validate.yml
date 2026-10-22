@@ -1,0 +1,45 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  esphome-config:
+    name: esphome config (${{ matrix.esphome }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Minimum supported version and the latest release.
+        esphome: ["2026.10.0", "latest"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install ESPHome
+        run: |
+          if [ "${{ matrix.esphome }}" = "latest" ]; then
+            pip install esphome
+          else
+            pip install "esphome==${{ matrix.esphome }}"
+          fi
+          esphome version
+
+      - name: Prepare example with dummy secrets and the local component
+        run: |
+          cp secrets.example.yaml example/secrets.yaml
+          sed 's#^  - source: github://.*#  - source: { type: local, path: ../components }#' \
+            example/brmesh-gateway.yaml > example/ci.yaml
+          grep -q 'type: local' example/ci.yaml
+
+      - name: Validate configuration
+        run: esphome config example/ci.yaml
